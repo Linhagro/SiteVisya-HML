@@ -17,6 +17,8 @@ let dadosView = [];
 let linhasRenderizadas = 0;
 let sortState = { colIndex: null, dir: "asc" };
 let selectedRowIndex = null;
+let vendedoresDisponiveis = [];
+let vendedoresSelecionados = [];
 
 const loaderOverlay = document.getElementById("loaderOverlay");
 let loaderTimerId = null;
@@ -98,6 +100,14 @@ function getAuthHeadersCarteira() {
   return headers;
 }
 
+function normalizarTextoCarteira(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 // ================== API ==================
 
 async function apiGetCarteira(page = 1, pageSize = 1000) {
@@ -119,6 +129,32 @@ async function apiGetCarteira(page = 1, pageSize = 1000) {
 
   const json = await resp.json();
   console.log("[CARTEIRA][GET] JSON:", json);
+  return json;
+}
+
+async function apiGetVendedores(nome = "") {
+  const base = getApiBaseCarteira();
+  const p = new URLSearchParams();
+  if (nome && nome.trim()) {
+    p.append("nome", nome.trim());
+  }
+  const qs = p.toString();
+  const url = `${base}/vendedores${qs ? "?" + qs : ""}`;
+  console.log("[CARTEIRA][VENDEDORES][GET] URL:", url);
+
+  const resp = await fetch(url, {
+    method: "GET",
+    headers: getAuthHeadersCarteira(),
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    console.error("[CARTEIRA][VENDEDORES][GET] HTTP != 200:", resp.status, txt);
+    throw new Error("Erro HTTP " + resp.status + " ao buscar vendedores");
+  }
+
+  const json = await resp.json();
+  console.log("[CARTEIRA][VENDEDORES][GET] JSON:", json);
   return json;
 }
 
@@ -176,12 +212,311 @@ function montarResumoCulturas(row) {
   return partes.join("; ");
 }
 
+// ================== SELECT ÚNICO VENDEDORES ==================
+
+function mapearVendedoresApi(lista) {
+  const mapa = new Map();
+
+  (lista || []).forEach((item) => {
+    const codigoRaw = item?.codvend;
+    const nomeRaw = item?.nome_vendedor;
+
+    if (codigoRaw == null && !nomeRaw) return;
+
+    const codigo = codigoRaw == null || codigoRaw === "" ? "" : String(codigoRaw);
+    const nome = String(nomeRaw || "").trim();
+    const qtdeClientes =
+      item?.qtde_clientes == null || item?.qtde_clientes === ""
+        ? null
+        : Number(item.qtde_clientes);
+
+    const key = `${codigo}||${normalizarTextoCarteira(nome)}`;
+
+    if (!mapa.has(key)) {
+      mapa.set(key, {
+        codigo,
+        nome,
+        qtde_clientes: Number.isNaN(qtdeClientes) ? null : qtdeClientes,
+      });
+    }
+  });
+
+  return Array.from(mapa.values()).sort((a, b) => {
+    const na = normalizarTextoCarteira(a.nome);
+    const nb = normalizarTextoCarteira(b.nome);
+    if (na < nb) return -1;
+    if (na > nb) return 1;
+    const ca = Number(a.codigo);
+    const cb = Number(b.codigo);
+    if (!Number.isNaN(ca) && !Number.isNaN(cb)) return ca - cb;
+    return String(a.codigo).localeCompare(String(b.codigo), "pt-BR");
+  });
+}
+
+async function carregarVendedoresDisponiveis(nome = "") {
+  try {
+    const json = await apiGetVendedores(nome);
+    vendedoresDisponiveis = mapearVendedoresApi(json?.vendedores || []);
+    sincronizarVendedoresSelecionadosComDados();
+  } catch (e) {
+    console.error("[CARTEIRA][VENDEDORES] Erro:", e);
+    mostrarToastCarteira("Erro ao carregar lista de vendedores.");
+  }
+}
+
+function getMultiVendedorSelecionados() {
+  return vendedoresDisponiveis.filter((v) =>
+    vendedoresSelecionados.includes(v.codigo || v.nome)
+  );
+}
+
+function atualizarTextoMultiVendedor() {
+  const textoEl = document.getElementById("multiVendedorTexto");
+  if (!textoEl) return;
+
+  const selecionados = getMultiVendedorSelecionados();
+
+  if (!selecionados.length) {
+    textoEl.className = "multiselect-vendedor-placeholder";
+    textoEl.textContent = "selecione um vendedor";
+    return;
+  }
+
+  const wrapper = document.createElement("span");
+  wrapper.className = "multiselect-vendedor-tags";
+
+  const v = selecionados[0];
+  const tag = document.createElement("span");
+  tag.className = "multiselect-vendedor-tag";
+
+  const text = document.createElement("span");
+  text.className = "multiselect-vendedor-tag-text";
+  text.textContent = v.nome || `Cód. ${v.codigo}`;
+
+  tag.appendChild(text);
+  wrapper.appendChild(tag);
+
+  textoEl.className = "";
+  textoEl.innerHTML = "";
+  textoEl.appendChild(wrapper);
+}
+
+function renderizarListaVendedores() {
+  const lista = document.getElementById("multiVendedorLista");
+  const busca = document.getElementById("fVendedorNomeCartBusca");
+  if (!lista) return;
+
+  const termo = normalizarTextoCarteira(busca?.value || "");
+  lista.innerHTML = "";
+
+  const filtrados = vendedoresDisponiveis.filter((v) => {
+    if (!termo) return true;
+    return (
+      normalizarTextoCarteira(v.nome).includes(termo) ||
+      normalizarTextoCarteira(v.codigo).includes(termo)
+    );
+  });
+
+  if (!filtrados.length) {
+    const vazio = document.createElement("div");
+    vazio.className = "multiselect-vendedor-vazio";
+    vazio.textContent = "Nenhum vendedor encontrado.";
+    lista.appendChild(vazio);
+    return;
+  }
+
+  filtrados.forEach((vendedor) => {
+    const key = vendedor.codigo || vendedor.nome;
+    const label = document.createElement("label");
+    label.className = "multiselect-vendedor-opcao";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = key;
+    checkbox.checked = vendedoresSelecionados.includes(key);
+
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        vendedoresSelecionados = [key];
+
+        lista.querySelectorAll('input[type="checkbox"]').forEach((other) => {
+          other.checked = other.value === key;
+        });
+      } else {
+        vendedoresSelecionados = [];
+      }
+
+      atualizarTextoMultiVendedor();
+    });
+
+    const texto = document.createElement("span");
+    texto.className = "multiselect-vendedor-opcao-texto";
+
+    const nome = document.createElement("span");
+    nome.className = "multiselect-vendedor-opcao-nome";
+    nome.textContent = vendedor.nome || "-";
+
+    const codigo = document.createElement("span");
+    codigo.className = "multiselect-vendedor-opcao-codigo";
+
+    const partesCodigo = [];
+    if (vendedor.codigo) partesCodigo.push(`Cód. ${vendedor.codigo}`);
+    if (vendedor.qtde_clientes != null) {
+      partesCodigo.push(`${vendedor.qtde_clientes.toLocaleString("pt-BR")} clientes`);
+    }
+    codigo.textContent = partesCodigo.join(" • ") || "Sem código";
+
+    texto.appendChild(nome);
+    texto.appendChild(codigo);
+
+    label.appendChild(checkbox);
+    label.appendChild(texto);
+    lista.appendChild(label);
+  });
+}
+
+async function abrirMultiVendedor() {
+  const root = document.getElementById("multiVendedorCart");
+  const dropdown = document.getElementById("multiVendedorDropdown");
+  const trigger = document.getElementById("multiVendedorTrigger");
+  const busca = document.getElementById("fVendedorNomeCartBusca");
+  if (!root || !dropdown || !trigger) return;
+
+  root.classList.add("is-open");
+  dropdown.hidden = false;
+  trigger.setAttribute("aria-expanded", "true");
+
+  if (!vendedoresDisponiveis.length) {
+    await carregarVendedoresDisponiveis(busca?.value || "");
+  }
+
+  renderizarListaVendedores();
+
+  setTimeout(() => {
+    if (busca) busca.focus();
+  }, 0);
+}
+
+function fecharMultiVendedor() {
+  const root = document.getElementById("multiVendedorCart");
+  const dropdown = document.getElementById("multiVendedorDropdown");
+  const trigger = document.getElementById("multiVendedorTrigger");
+  if (!root || !dropdown || !trigger) return;
+
+  root.classList.remove("is-open");
+  dropdown.hidden = true;
+  trigger.setAttribute("aria-expanded", "false");
+}
+
+function toggleMultiVendedor() {
+  const dropdown = document.getElementById("multiVendedorDropdown");
+  if (!dropdown) return;
+  if (dropdown.hidden) abrirMultiVendedor();
+  else fecharMultiVendedor();
+}
+
+function sincronizarVendedoresSelecionadosComDados() {
+  const chavesValidas = new Set(
+    vendedoresDisponiveis.map((v) => v.codigo || v.nome)
+  );
+
+  vendedoresSelecionados = vendedoresSelecionados.filter((v) =>
+    chavesValidas.has(v)
+  );
+
+  if (vendedoresSelecionados.length > 1) {
+    vendedoresSelecionados = [vendedoresSelecionados[0]];
+  }
+
+  atualizarTextoMultiVendedor();
+  renderizarListaVendedores();
+}
+
+function initMultiSelectVendedor() {
+  const root = document.getElementById("multiVendedorCart");
+  const trigger = document.getElementById("multiVendedorTrigger");
+  const busca = document.getElementById("fVendedorNomeCartBusca");
+  const btnTodos = document.getElementById("btnSelecionarTodosVendedores");
+  const btnLimpar = document.getElementById("btnLimparVendedores");
+
+  if (!root || !trigger) return;
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMultiVendedor();
+  });
+
+  if (busca) {
+    const debouncedBuscarVendedores = debounce(async () => {
+      await carregarVendedoresDisponiveis(busca.value || "");
+      renderizarListaVendedores();
+    }, 350);
+
+    busca.addEventListener("input", () => {
+      debouncedBuscarVendedores();
+    });
+
+    busca.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        fecharMultiVendedor();
+        trigger.focus();
+      }
+    });
+  }
+
+  if (btnTodos) {
+    btnTodos.addEventListener("click", () => {
+      const buscaEl = document.getElementById("fVendedorNomeCartBusca");
+      const termo = normalizarTextoCarteira(buscaEl?.value || "");
+
+      const visiveis = vendedoresDisponiveis.filter((v) => {
+        if (!termo) return true;
+        return (
+          normalizarTextoCarteira(v.nome).includes(termo) ||
+          normalizarTextoCarteira(v.codigo).includes(termo)
+        );
+      });
+
+      if (visiveis.length) {
+        const primeiro = visiveis[0];
+        vendedoresSelecionados = [primeiro.codigo || primeiro.nome];
+      } else {
+        vendedoresSelecionados = [];
+      }
+
+      atualizarTextoMultiVendedor();
+      renderizarListaVendedores();
+    });
+  }
+
+  if (btnLimpar) {
+    btnLimpar.addEventListener("click", () => {
+      vendedoresSelecionados = [];
+      atualizarTextoMultiVendedor();
+      renderizarListaVendedores();
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!root.contains(e.target)) {
+      fecharMultiVendedor();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      fecharMultiVendedor();
+    }
+  });
+
+  atualizarTextoMultiVendedor();
+  renderizarListaVendedores();
+}
+
 // ================== FILTROS ==================
 
 function getFiltrosCarteiraQS() {
   const codvend = (document.getElementById("fVendedorCart")?.value || "").trim();
-  const vendedor =
-    (document.getElementById("fVendedorNomeCart")?.value || "").trim();
   const codparc = (document.getElementById("fClienteCart")?.value || "").trim();
   const cliente =
     (document.getElementById("fClienteNomeCart")?.value || "").trim();
@@ -189,8 +524,20 @@ function getFiltrosCarteiraQS() {
   const cultura = (document.getElementById("fCulturaCart")?.value || "").trim();
 
   const p = new URLSearchParams();
-  if (codvend) p.append("codvend", codvend);
-  if (vendedor) p.append("vendedor", vendedor);
+  if (codvend) {
+    p.append("codvend", codvend);
+  } else {
+    const vendedoresSelecionadosObjs = getMultiVendedorSelecionados();
+    if (vendedoresSelecionadosObjs.length === 1) {
+      const vend = vendedoresSelecionadosObjs[0];
+      if (vend.codigo) {
+        p.append("codvend", String(vend.codigo).trim());
+      } else if (vend.nome) {
+        p.append("vendedor", vend.nome.trim());
+      }
+    }
+  }
+
   if (codparc) p.append("codparc", codparc);
   if (cliente) p.append("cliente", cliente);
   if (cidade) p.append("cidade", cidade);
@@ -203,16 +550,20 @@ function getFiltrosCarteiraQS() {
 function limparFiltrosCarteira() {
   [
     "fVendedorCart",
-    "fVendedorNomeCart",
     "fClienteCart",
     "fClienteNomeCart",
     "fCidadeCart",
     "fCulturaCart",
     "fBuscaGeral",
+    "fVendedorNomeCartBusca",
   ].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+
+  vendedoresSelecionados = [];
+  atualizarTextoMultiVendedor();
+  carregarVendedoresDisponiveis();
 }
 
 // ================== CARGA / VIEW ==================
@@ -238,6 +589,21 @@ function construirView() {
     (document.getElementById("fBuscaGeral")?.value || "").trim().toUpperCase();
 
   const filtrado = dadosBrutos.filter((reg) => {
+    const selecionados = getMultiVendedorSelecionados();
+
+    if (selecionados.length) {
+      const nomeReg = normalizarTextoCarteira(reg?.NOME_VENDEDOR);
+      const codReg = String(reg?.CODVEND ?? "").trim();
+
+      const bateVendedor = selecionados.some((v) => {
+        const nomeVend = normalizarTextoCarteira(v.nome);
+        const codVend = String(v.codigo ?? "").trim();
+        return (nomeVend && nomeVend === nomeReg) || (codVend && codVend === codReg);
+      });
+
+      if (!bateVendedor) return false;
+    }
+
     if (!texto) return true;
     for (const v of Object.values(reg || {})) {
       if (v == null) continue;
@@ -346,15 +712,12 @@ function renderizarMaisLinhas(qtd) {
       tr.appendChild(td);
     }
 
-    // VENDEDOR
     add("CODVEND");
     add("NOME_VENDEDOR");
 
-    // CLIENTE
     add("CODPARC");
     add("NOME_CLIENTE");
 
-    // ENDEREÇO
     add("ParceiroEnderecoCompl");
     add("ParceiroEnderecoNumero");
     add("ParceiroLogradouro");
@@ -364,7 +727,6 @@ function renderizarMaisLinhas(qtd) {
     add("ParceiroUFSigla");
     add("ParceiroCEP");
 
-    // CULTURAS
     add("QtdeCulturasDistintas");
     add("CulturasResumo");
 
@@ -386,20 +748,16 @@ function renderizarMaisLinhas(qtd) {
     }
     tr.appendChild(tdDet);
 
-    // CONTATO
     add("ParceiroTelefone");
     add("ParceiroEmail");
 
-    // COORDENADAS
     add("ParceiroLatitude");
     add("ParceiroLongitude");
 
-    // CRÉDITO
     add("CODEMP");
     add("DTLIM", fmtDataIso);
     add("LIMCRED", fmtValor);
 
-    // ÚLTIMA VENDA
     add("NroUnico");
     add("NumeroNota");
     add("DataVenda", fmtDataIso);
@@ -408,19 +766,16 @@ function renderizarMaisLinhas(qtd) {
     add("VendedorQueVendeuNome");
     add("CargoVendedorQueVendeu");
 
-    // ÚLTIMA ATIVIDADE
     add("IdAtividadeUltima");
     add("DtLancamentoUltimaAtividade", fmtDataIso);
     add("DtInicialUltimaAtividade", fmtDataIso);
     add("AssuntoUltimaAtividade");
     add("ObservacaoUltimaAtividade");
 
-    // TOTAIS ANO
     add("Total_2024", fmtValor);
     add("Total_2025", fmtValor);
     add("Total_2026", fmtValor);
 
-    // LTV
     add("LTV", fmtValor);
 
     if (selectedRowIndex !== null && selectedRowIndex === i) {
@@ -613,11 +968,10 @@ function aplicarFiltroGeral() {
 function exportarTabelaParaExcel() {
   const vendedorCod =
     (document.getElementById("fVendedorCart")?.value || "").trim();
-  const vendedorNome =
-    (document.getElementById("fVendedorNomeCart")?.value || "").trim();
+  const vendedorNomeSelecionado = getMultiVendedorSelecionados();
 
-  if (!vendedorCod && !vendedorNome) {
-    mostrarToastCarteira("Para exportar, informe código ou nome do vendedor.");
+  if (!vendedorCod && !vendedorNomeSelecionado.length) {
+    mostrarToastCarteira("Para exportar, informe código ou selecione vendedor.");
     return;
   }
 
@@ -629,12 +983,10 @@ function exportarTabelaParaExcel() {
   const table = document.getElementById("tblCarteira");
   if (!table) return;
 
-  // Clona a tabela da tela (para aproveitar THEAD)
   const cloned = table.cloneNode(true);
   const clTbody = cloned.tBodies[0];
   clTbody.innerHTML = "";
 
-  // Helper para truncar textos grandes em QUALQUER campo de texto
   function truncText(value, maxLen = 300) {
     if (value == null || value === "") return "";
     const s = String(value);
@@ -660,31 +1012,23 @@ function exportarTabelaParaExcel() {
           raw = fmtTextOrDash(raw);
         }
 
-        // Truncagem genérica para campos textuais muito longos
         if (opts.truncate) {
           raw = truncText(raw, opts.maxLen || 300);
         }
 
         td.textContent = raw == null ? "" : String(raw);
-
-        // Forçar sem quebra de linha e sem crescimento de linha
         td.style.whiteSpace = "nowrap";
         td.style.overflow = "hidden";
 
         tr.appendChild(td);
       }
 
-      // mesma ordem do THEAD (sem botão de detalhe clicável)
-
-      // VENDEDOR
       add("CODVEND");
       add("NOME_VENDEDOR", null, undefined, { truncate: true, maxLen: 120 });
 
-      // CLIENTE
       add("CODPARC");
       add("NOME_CLIENTE", null, undefined, { truncate: true, maxLen: 120 });
 
-      // ENDEREÇO
       add("ParceiroEnderecoCompl", null, undefined, {
         truncate: true,
         maxLen: 120,
@@ -700,7 +1044,6 @@ function exportarTabelaParaExcel() {
       add("ParceiroUFSigla");
       add("ParceiroCEP");
 
-      // CULTURAS
       add("QtdeCulturasDistintas");
 
       if (cult) {
@@ -724,26 +1067,21 @@ function exportarTabelaParaExcel() {
         });
       }
 
-      // coluna de detalhe – vazia (não precisa botão no Excel)
       add(null, null, "");
 
-      // CONTATO
       add("ParceiroTelefone", null, undefined, {
         truncate: true,
         maxLen: 60,
       });
       add("ParceiroEmail", null, undefined, { truncate: true, maxLen: 120 });
 
-      // COORDENADAS
       add("ParceiroLatitude");
       add("ParceiroLongitude");
 
-      // CRÉDITO
       add("CODEMP");
       add("DTLIM", fmtDataIso);
       add("LIMCRED", fmtValor);
 
-      // ÚLTIMA VENDA
       add("NroUnico");
       add("NumeroNota");
       add("DataVenda", fmtDataIso);
@@ -758,7 +1096,6 @@ function exportarTabelaParaExcel() {
         maxLen: 120,
       });
 
-      // ÚLTIMA ATIVIDADE
       add("IdAtividadeUltima");
       add("DtLancamentoUltimaAtividade", fmtDataIso);
       add("DtInicialUltimaAtividade", fmtDataIso);
@@ -767,25 +1104,21 @@ function exportarTabelaParaExcel() {
         maxLen: 200,
       });
 
-      // Desc. última Atividade – principal fonte de linhas gigantes
       add("ObservacaoUltimaAtividade", null, undefined, {
         truncate: true,
-        maxLen: 300, // ajuste como quiser (150, 200, 300…)
+        maxLen: 300,
       });
 
-      // TOTAIS
       add("Total_2024", fmtValor);
       add("Total_2025", fmtValor);
       add("Total_2026", fmtValor);
 
-      // LTV
       add("LTV", fmtValor);
 
       clTbody.appendChild(tr);
     });
   });
 
-  // Estilos específicos para o HTML do Excel (reforça o nowrap)
   const styleEl = document.createElement("style");
   styleEl.textContent = `
     table {
@@ -800,7 +1133,6 @@ function exportarTabelaParaExcel() {
   `;
   cloned.appendChild(styleEl);
 
-  // Geração do arquivo Excel a partir do HTML
   const blob = new Blob(["\ufeff" + cloned.outerHTML], {
     type: "application/vnd.ms-excel;charset=utf-8",
   });
@@ -815,6 +1147,7 @@ function exportarTabelaParaExcel() {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
 // ================== RESIZE / DRAG ==================
 
 function initColumnResize() {
@@ -952,7 +1285,7 @@ async function atualizarTudoCarteira() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const user = getUsuarioObrigatorioCarteira();
   if (!user) return;
 
@@ -969,9 +1302,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (btnAplicar) btnAplicar.addEventListener("click", atualizarTudoCarteira);
   if (btnLimpar) {
-    btnLimpar.addEventListener("click", () => {
+    btnLimpar.addEventListener("click", async () => {
       limparFiltrosCarteira();
-      atualizarTudoCarteira();
+      await atualizarTudoCarteira();
     });
   }
   if (btnExport) btnExport.addEventListener("click", exportarTabelaParaExcel);
@@ -990,9 +1323,7 @@ window.addEventListener("DOMContentLoaded", () => {
   function atualizarEstadoBotaoExport() {
     const vendedorCod =
       (document.getElementById("fVendedorCart")?.value || "").trim();
-    const vendedorNome =
-      (document.getElementById("fVendedorNomeCart")?.value || "").trim();
-    const habilita = !!(vendedorCod || vendedorNome);
+    const habilita = !!(vendedorCod || getMultiVendedorSelecionados().length);
     if (btnExport) {
       btnExport.disabled = !habilita;
       btnExport.classList.toggle("btn-disabled", !habilita);
@@ -1001,7 +1332,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const idsFiltrosApi = [
     "fVendedorCart",
-    "fVendedorNomeCart",
     "fClienteCart",
     "fClienteNomeCart",
     "fCidadeCart",
@@ -1014,7 +1344,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const evt = el.tagName === "SELECT" ? "change" : "input";
     el.addEventListener(evt, debouncedAtualizarApi);
 
-    if (id === "fVendedorCart" || id === "fVendedorNomeCart") {
+    if (id === "fVendedorCart") {
       el.addEventListener(evt, atualizarEstadoBotaoExport);
     }
   });
@@ -1033,11 +1363,49 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     });
 
+  initMultiSelectVendedor();
+
+  const btnSelecionarTodosVendedores = document.getElementById("btnSelecionarTodosVendedores");
+  const btnLimparVendedores = document.getElementById("btnLimparVendedores");
+  const fVendedorNomeCartBusca = document.getElementById("fVendedorNomeCartBusca");
+
+  if (btnSelecionarTodosVendedores) {
+    btnSelecionarTodosVendedores.addEventListener("click", atualizarEstadoBotaoExport);
+  }
+
+  if (btnLimparVendedores) {
+    btnLimparVendedores.addEventListener("click", atualizarEstadoBotaoExport);
+  }
+
+  if (fVendedorNomeCartBusca) {
+    fVendedorNomeCartBusca.addEventListener("input", () => {
+      renderizarListaVendedores();
+    });
+  }
+
+  const triggerMulti = document.getElementById("multiVendedorTrigger");
+  if (triggerMulti) {
+    triggerMulti.addEventListener("click", () => {
+      renderizarListaVendedores();
+    });
+  }
+
+  document.addEventListener("change", (e) => {
+    if (
+      e.target &&
+      e.target.closest &&
+      e.target.closest("#multiVendedorLista")
+    ) {
+      atualizarEstadoBotaoExport();
+    }
+  });
+
   initColumnResize();
   initColumnDrag();
   initInfiniteScrollLocal();
   initRowSelectionCarteira();
 
+  await carregarVendedoresDisponiveis();
   atualizarEstadoBotaoExport();
-  atualizarTudoCarteira();
+  await atualizarTudoCarteira();
 });

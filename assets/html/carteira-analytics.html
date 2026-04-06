@@ -5,33 +5,23 @@
   <title>VISYA - Carteira Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Fonte padrão -->
   <link
     rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap"
   />
 
-  <!-- CSS específico Carteira -->
   <link rel="stylesheet" href="../css/carteira_analytics.css" />
-
-  <!-- CSS do loader global (compartilhado) -->
   <link rel="stylesheet" href="../css/loader.css" />
 
-  <!-- JS global (auth etc.) -->
   <script src="../js/global.js" defer></script>
-
-  <!-- JS específico Carteira -->
   <script src="../js/carteira_analytics.js" defer></script>
 </head>
 <body>
-  <!-- TOAST -->
   <div id="toastCarteira" class="toast-ano" aria-hidden="true">
     <span id="toastCarteiraMsg"></span>
   </div>
 
-  <!-- PÁGINA DENTRO DO IFRAME -->
   <main class="carteira-page">
-    <!-- HEADER -->
     <header class="dash-header">
       <div class="dash-header-left">
         <span class="dash-kicker">Gestão comercial</span>
@@ -47,16 +37,65 @@
       </div>
     </header>
 
-    <!-- FILTROS HORIZONTAIS -->
     <section class="carteira-filtros">
-      <!-- Vendedor -->
       <div class="filtro-campo">
-        <label for="fVendedorNomeCart">Vendedor (nome)</label>
-        <input
-          id="fVendedorNomeCart"
-          type="text"
-          placeholder="parte do nome"
-        />
+        <label for="fVendedorNomeCartBusca">Vendedor (nome)</label>
+        <div class="multiselect-vendedor" id="multiVendedorCart">
+          <button
+            type="button"
+            id="multiVendedorTrigger"
+            class="multiselect-vendedor-trigger"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span
+              id="multiVendedorTexto"
+              class="multiselect-vendedor-placeholder"
+            >
+              selecione um vendedor
+            </span>
+          </button>
+
+          <div
+            class="multiselect-vendedor-dropdown"
+            id="multiVendedorDropdown"
+            hidden
+          >
+            <div class="multiselect-vendedor-search-wrap">
+              <input
+                id="fVendedorNomeCartBusca"
+                class="multiselect-vendedor-search"
+                type="text"
+                placeholder="buscar vendedor..."
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="multiselect-vendedor-actions">
+              <button
+                type="button"
+                id="btnSelecionarTodosVendedores"
+                class="btn-multi-acao"
+              >
+                Primeiro da lista
+              </button>
+              <button
+                type="button"
+                id="btnLimparVendedores"
+                class="btn-multi-acao"
+              >
+                Limpar
+              </button>
+            </div>
+
+            <div
+              id="multiVendedorLista"
+              class="multiselect-vendedor-lista"
+              role="listbox"
+              aria-multiselectable="false"
+            ></div>
+          </div>
+        </div>
       </div>
 
       <div class="filtro-campo filtro-campo-curto">
@@ -70,7 +109,6 @@
         />
       </div>
 
-      <!-- Cliente -->
       <div class="filtro-campo">
         <label for="fClienteNomeCart">Cliente</label>
         <input
@@ -91,7 +129,6 @@
         />
       </div>
 
-      <!-- Cidade -->
       <div class="filtro-campo">
         <label for="fCidadeCart">Cidade</label>
         <input
@@ -101,7 +138,6 @@
         />
       </div>
 
-      <!-- Cultura -->
       <div class="filtro-campo">
         <label for="fCulturaCart">Cultura</label>
         <input
@@ -111,7 +147,6 @@
         />
       </div>
 
-      <!-- Busca geral -->
       <div class="filtro-campo filtro-campo-busca">
         <label for="fBuscaGeral">Busca geral</label>
         <input
@@ -121,7 +156,6 @@
         />
       </div>
 
-      <!-- Ações -->
       <div class="filtro-acoes">
         <button class="btn-filtro" type="button" id="btnAplicarCart">
           <span>Aplicar</span>
@@ -142,7 +176,6 @@
       </div>
     </section>
 
-    <!-- CONTEÚDO PRINCIPAL -->
     <section class="dash-content">
       <div class="table-header-info">
         <span id="infoQtdeRegistros">– registros</span>
@@ -150,17 +183,55 @@
 
       <div class="table-wrapper">
         <table id="tblCarteira" class="carteira-table">
+          <colgroup>
+            <col class="w-cod-vendedor" />
+            <col class="w-nome-vendedor" />
+            <col class="w-cod-cliente" />
+            <col class="w-nome-cliente" />
+            <col class="w-end-comp" />
+            <col class="w-end-num" />
+            <col class="w-end-logradouro" />
+            <col class="w-end-bairro" />
+            <col class="w-end-cidade" />
+            <col class="w-end-cidade-cod" />
+            <col class="w-end-uf" />
+            <col class="w-end-cep" />
+            <col class="w-cultura-qtde" />
+            <col class="w-cultura-resumo" />
+            <col class="w-cultura-detalhe" />
+            <col class="w-telefone" />
+            <col class="w-email" />
+            <col class="w-lat" />
+            <col class="w-lng" />
+            <col class="w-cod-emp" />
+            <col class="w-dtlim" />
+            <col class="w-limcred" />
+            <col class="w-nrounico" />
+            <col class="w-numnota" />
+            <col class="w-dtvenda" />
+            <col class="w-valortotal" />
+            <col class="w-vv-cod" />
+            <col class="w-vv-nome" />
+            <col class="w-vv-cargo" />
+            <col class="w-atv-id" />
+            <col class="w-atv-lanc" />
+            <col class="w-atv-visita" />
+            <col class="w-atv-assunto" />
+            <col class="w-atv-obs" />
+            <col class="w-total-2024" />
+            <col class="w-total-2025" />
+            <col class="w-total-2026" />
+            <col class="w-ltv" />
+          </colgroup>
+
           <thead>
             <tr>
-              <!-- VENDEDOR -->
               <th data-col="CODVEND" class="group-vendedor"><span>Cód. Vendedor</span></th>
               <th data-col="NOME_VENDEDOR" class="group-vendedor"><span>Nome do Vendedor</span></th>
 
-              <!-- CLIENTE -->
               <th data-col="CODPARC" class="group-cliente"><span>Cód. Cliente</span></th>
               <th data-col="NOME_CLIENTE" class="group-cliente"><span>Nome do Cliente</span></th>
 
-              <!-- ENDEREÇO -->
               <th data-col="ParceiroEnderecoCompl" class="group-endereco"><span>Complemento</span></th>
               <th data-col="ParceiroEnderecoNumero" class="group-endereco"><span>Número</span></th>
               <th data-col="ParceiroLogradouro" class="group-endereco"><span>Logradouro</span></th>
@@ -170,31 +241,20 @@
               <th data-col="ParceiroUFSigla" class="group-endereco"><span>UF</span></th>
               <th data-col="ParceiroCEP" class="group-endereco"><span>CEP</span></th>
 
-              <!-- CULTURA -->
-              <th data-col="QtdeCulturasDistintas" class="group-cultura">
-                <span>Qtde Culturas</span>
-              </th>
-              <th data-col="CulturasResumo" class="group-cultura">
-                <span>Culturas / Áreas</span>
-              </th>
-              <th data-col="CulturasDetalhe" class="group-cultura">
-                <span>Detalhe</span>
-              </th>
+              <th data-col="QtdeCulturasDistintas" class="group-cultura"><span>Qtde Culturas</span></th>
+              <th data-col="CulturasResumo" class="group-cultura"><span>Culturas / Áreas</span></th>
+              <th data-col="CulturasDetalhe" class="group-cultura"><span>Detalhe</span></th>
 
-              <!-- CONTATO -->
               <th data-col="ParceiroTelefone" class="group-contato"><span>Telefone</span></th>
               <th data-col="ParceiroEmail" class="group-contato"><span>E-mail</span></th>
 
-              <!-- COORDENADAS -->
               <th data-col="ParceiroLatitude" class="group-coord"><span>Latitude</span></th>
               <th data-col="ParceiroLongitude" class="group-coord"><span>Longitude</span></th>
 
-              <!-- CRÉDITO -->
               <th data-col="CODEMP" class="group-credito"><span>Cód. Empresa</span></th>
               <th data-col="DTLIM" class="group-credito"><span>Data Limite</span></th>
               <th data-col="LIMCRED" class="group-credito"><span>Limite Crédito</span></th>
 
-              <!-- ÚLTIMA VENDA -->
               <th data-col="NroUnico" class="group-venda"><span>Nro. Único</span></th>
               <th data-col="NumeroNota" class="group-venda"><span>Nº Nota</span></th>
               <th data-col="DataVenda" class="group-venda"><span>Data Venda</span></th>
@@ -203,22 +263,20 @@
               <th data-col="VendedorQueVendeuNome" class="group-venda"><span>Quem Vendeu</span></th>
               <th data-col="CargoVendedorQueVendeu" class="group-venda"><span>Cargo</span></th>
 
-              <!-- ÚLTIMA ATIVIDADE -->
               <th data-col="IdAtividadeUltima" class="group-atividade"><span>ID Atividade</span></th>
               <th data-col="DtLancamentoUltimaAtividade" class="group-atividade"><span>Dt. Lançamento</span></th>
               <th data-col="DtInicialUltimaAtividade" class="group-atividade"><span>Data da última Visita</span></th>
               <th data-col="AssuntoUltimaAtividade" class="group-atividade"><span>Assunto Última Atividade</span></th>
               <th data-col="ObservacaoUltimaAtividade" class="group-atividade"><span>Desc. última Atividade</span></th>
 
-              <!-- TOTAIS ANO -->
               <th data-col="Total_2024" class="group-ltv"><span>Total 2024</span></th>
               <th data-col="Total_2025" class="group-ltv"><span>Total 2025</span></th>
               <th data-col="Total_2026" class="group-ltv"><span>Total 2026</span></th>
 
-              <!-- LTV -->
               <th data-col="LTV" class="group-ltv"><span>LTV</span></th>
             </tr>
           </thead>
+
           <tbody id="tbodyCarteira">
             <tr>
               <td colspan="50" class="empty-state">
@@ -231,7 +289,6 @@
     </section>
   </main>
 
-  <!-- MODAL DE CULTURAS -->
   <div id="culturasModal" class="culturas-modal" aria-hidden="true">
     <div class="culturas-modal-backdrop"></div>
     <div class="culturas-modal-content">
@@ -249,7 +306,6 @@
     </div>
   </div>
 
-  <!-- LOADER GLOBAL CENTRALIZADO -->
   <div class="loader-overlay" id="loaderOverlay" aria-hidden="true">
     <iframe
       src="loader.html"
@@ -260,7 +316,6 @@
     ></iframe>
   </div>
 
-  <!-- Tema sincronizado com sidebar -->
   <script>
     const THEME_KEY = 'visya-sidebar-theme';
 
