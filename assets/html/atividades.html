@@ -3,39 +3,251 @@
 <head>
   <meta charset="UTF-8" />
   <title>VISYA - Atividades</title>
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- CSS do sidebar -->
-  <link rel="stylesheet" href="../css/sidebar.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <!-- CSS específico da tela Atividades -->
   <link rel="stylesheet" href="../css/atividades.css" />
+  <link rel="stylesheet" href="../css/loader.css" />
 
-  <!-- JS global (opcional) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="../js/global.js" defer></script>
-
-  <!-- JS específico da tela Atividades -->
   <script src="../js/atividades.js" defer></script>
 </head>
 <body>
-  <div class="layout">
-    <!-- SIDEBAR -->
-    <aside class="sidebar-container">
-      <iframe
-        src="sidebar.html"
-        class="sidebar-frame"
-        title="Menu lateral VISYA"
-      ></iframe>
-    </aside>
+  <main class="atividades-page">
+    <header class="ativ-header">
+      <div class="ativ-header-left">
+        <h1 class="ativ-titulo">ATIVIDADES</h1>
+        <p class="ativ-subtitulo">Visão geral, mapa de localização, listagem e conversão de vendas.</p>
+      </div>
 
-    <!-- CONTEÚDO PRINCIPAL -->
-    <main class="main-content">
-      <h1>Atividades</h1>
-      <p>
-        (Tela de Atividades ainda em construção.)
-      </p>
-    </main>
+      <div class="ativ-header-right">
+        <div class="ativ-user-info">
+          <span id="ativUserNome" class="ativ-user-nome">Carregando...</span>
+          <span id="ativUserEmail" class="ativ-user-email"></span>
+        </div>
+      </div>
+    </header>
+
+    <section class="ativ-filtros">
+      <div class="filtro-campo">
+        <label for="fDtInicio">Data início</label>
+        <input id="fDtInicio" type="date" />
+      </div>
+
+      <div class="filtro-campo">
+        <label for="fDtFim">Data fim</label>
+        <input id="fDtFim" type="date" />
+      </div>
+
+      <div class="filtro-campo">
+        <label for="fVendedor">Vendedor</label>
+        <select id="fVendedor">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filtro-campo">
+        <label for="fTipoAtiv">Tipo de atividade</label>
+        <select id="fTipoAtiv">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filtro-campo">
+        <label for="fIdStatus">Status</label>
+        <select id="fIdStatus">
+          <option value="">Todos</option>
+          <option value="1">1 – Pendente</option>
+          <option value="2">2 – Em andamento</option>
+          <option value="3">3 – Concluído</option>
+          <option value="4">4 – Cancelado</option>
+        </select>
+      </div>
+
+      <button type="button" class="btn-filtro" id="btnBuscar"><span>↻</span> Atualizar</button>
+      <button type="button" class="btn-filtro" id="btnLimpar"><span>✕</span> Limpar</button>
+    </section>
+
+    <section class="ativ-resumo">
+      <div class="resumo-card" id="cardTotalAtiv">
+        <span class="resumo-label">Total de atividades</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Total real da API</span>
+      </div>
+
+      <div class="resumo-card" id="cardTotalCarteira">
+        <span class="resumo-label">Total carteira</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Total real da carteira</span>
+      </div>
+
+      <div class="resumo-card card-destaque-green" id="cardClientesAtend">
+        <span class="resumo-label">Clientes atendidos %</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Clientes com atividade</span>
+      </div>
+
+      <div class="resumo-card card-destaque-blue" id="cardClientesVisita">
+        <span class="resumo-label">Clientes com visita</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Quantidade e %</span>
+      </div>
+
+      <div class="resumo-card card-destaque-yellow" id="cardTaxaConv">
+        <span class="resumo-label">Taxa conversão</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Venda x visita</span>
+      </div>
+
+      <div class="resumo-card" id="cardPedidos">
+        <span class="resumo-label">Pedidos emitidos</span>
+        <strong class="resumo-valor">—</strong>
+        <span class="resumo-legenda">Clientes com venda</span>
+      </div>
+    </section>
+
+    <nav class="ativ-tabs">
+      <button class="tab-btn active" data-tab="visao">📊 Visão geral</button>
+      <button class="tab-btn" data-tab="mapa">🗺️ Mapa</button>
+      <button class="tab-btn" data-tab="listagem">📋 Listagem</button>
+      <button class="tab-btn" data-tab="conversao">🔄 Conversão de vendas</button>
+    </nav>
+
+    <div id="tab-visao" class="tab-panel active">
+      <div class="visao-grid">
+        <section class="painel-bloco visao-grafico">
+          <div class="bloco-titulo">Evolução mensal de atividades</div>
+          <div class="grafico-wrap grafico-wrap-xl">
+            <canvas id="graficoEvolucaoMensal"></canvas>
+          </div>
+        </section>
+
+        <section class="painel-bloco visao-ranking">
+          <div class="bloco-titulo">Ranking de vendedores com visitas</div>
+          <div class="rank-scroll rank-scroll-full" id="rankingVisitas">
+            <div class="ativ-empty">Carregando...</div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="tab-mapa" class="tab-panel">
+      <div class="painel-bloco painel-mapa-grow painel-mapa-limpo">
+        <div class="mapa-acoes mapa-acoes-topo">
+          <button type="button" class="btn-filtro" id="btnMapaRecarregar">Atualizar mapa</button>
+          <button type="button" class="btn-filtro" id="btnMapaAjustar">Ajustar zoom</button>
+        </div>
+
+        <div class="mapa-container mapa-container-full">
+          <div id="mapaAtividades"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-listagem" class="tab-panel">
+      <div class="listagem-topbar">
+        <div class="listagem-info" id="infoAtividades">Carregando...</div>
+        <button type="button" class="btn-filtro" id="btnExportarCsv">Exportar CSV</button>
+      </div>
+
+      <div class="ativ-tabela-bloco">
+        <div class="ativ-table-wrapper">
+          <table class="ativ-table">
+            <colgroup>
+              <col style="width:9%" />
+              <col style="width:14%" />
+              <col style="width:22%" />
+              <col style="width:18%" />
+              <col style="width:14%" />
+              <col style="width:19%" />
+              <col style="width:4%" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Cliente</th>
+                <th>Vendedor</th>
+                <th>Assunto</th>
+                <th>Observação</th>
+                <th>GPS</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyAtividades">
+              <tr><td colspan="7" class="ativ-empty">Carregando dados...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-conversao" class="tab-panel">
+      <div class="conversao-resumo-cards conversao-resumo-cards-4">
+        <div class="conv-card">
+          <span class="conv-card-label">Clientes convertidos</span>
+          <span class="conv-card-valor green" id="convClientesConv">—</span>
+        </div>
+
+        <div class="conv-card">
+          <span class="conv-card-label">Taxa geral de conversão</span>
+          <span class="conv-card-valor yellow" id="convTaxaGeral">—</span>
+        </div>
+
+        <div class="conv-card">
+          <span class="conv-card-label">Valor convertido</span>
+          <span class="conv-card-valor green" id="convValorConv">—</span>
+        </div>
+
+        <div class="conv-card">
+          <span class="conv-card-label">Total de vendas no período</span>
+          <span class="conv-card-valor blue" id="convTotalVendas">—</span>
+        </div>
+      </div>
+
+      <div class="conversao-grid conversao-grid-grow conversao-grid-full">
+        <div class="conversao-col">
+          <div class="ativ-col-title title-good">🏆 Melhores taxas de conversão</div>
+          <div class="rank-scroll rank-scroll-full" id="rankingBons">
+            <div class="ativ-empty">Carregando...</div>
+          </div>
+        </div>
+
+        <div class="conversao-col">
+          <div class="ativ-col-title title-bad">⚠️ Menores taxas de conversão</div>
+          <div class="rank-scroll rank-scroll-full" id="rankingRuins">
+            <div class="ativ-empty">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="loader-overlay" id="loaderOverlay" aria-hidden="true">
+    <iframe src="loader.html" class="loader-frame" frameborder="0" scrolling="no" title="Carregando..."></iframe>
   </div>
+
+  <script>
+    const THEME_KEY = "visya-sidebar-theme";
+
+    function applyLocalTheme() {
+      let saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+      const theme = saved === "light" || saved === "dark" ? saved : "dark";
+      document.body.classList.toggle("light-theme", theme === "light");
+    }
+
+    applyLocalTheme();
+
+    window.addEventListener("message", (event) => {
+      if (!event.data || event.data.type !== "visya-theme") return;
+      const theme = event.data.theme;
+      document.body.classList.toggle("light-theme", theme === "light");
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+    });
+  </script>
 </body>
 </html>
