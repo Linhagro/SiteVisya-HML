@@ -330,14 +330,14 @@
                 Rotas
               </a>
             </li>
-            <!-- NOVA TELA: MONTAGEM DE CARGA -->
+            <!-- NOVA TELA: MONTAGEM DE CARGA (NOVA ESTRUTURA) -->
             <li class="nav-item">
               <a
-                href="montagem_carga.html"
+                href="../abas/logistica/html/montagem_carga.html"
                 class="nav-link dropdown-link"
                 data-frame-target="visya-frame"
                 data-modulo="LOGISTICA"
-                data-codigo="MONTAGEM_CARGA"
+                data-codigo="MONTAGEM_CARGA_NOVA"
               >
                 Montagem de Carga
               </a>
@@ -553,13 +553,13 @@
     function closeAllDropdowns() {
       document
         .querySelectorAll(".dropdown-container.open")
-        .forEach((openDropdown) => {
+        .forEach(openDropdown => {
           const menu = openDropdown.querySelector(".dropdown-menu");
           if (menu) toggleDropdown(openDropdown, menu, false);
         });
     }
 
-    document.querySelectorAll(".dropdown-toggle").forEach((dropdownToggle) => {
+    document.querySelectorAll(".dropdown-toggle").forEach(dropdownToggle => {
       dropdownToggle.addEventListener("click", function (e) {
         e.preventDefault();
 
@@ -590,7 +590,7 @@
       });
     }
 
-    document.querySelectorAll("a[data-frame-target]").forEach((link) => {
+    document.querySelectorAll("a[data-frame-target]").forEach(link => {
       link.addEventListener("click", function (e) {
         e.preventDefault();
         const href = link.getAttribute("href");
@@ -613,8 +613,8 @@
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: "Bearer " + auth.token,
-          },
+            Authorization: "Bearer " + auth.token
+          }
         });
 
         if (!resp.ok) {
@@ -628,7 +628,7 @@
         const data = await resp.json();
         const novoAuth = {
           token: data.token || auth.token,
-          usuario: data.usuario || auth.usuario,
+          usuario: data.usuario || auth.usuario
         };
         setAuthData(novoAuth);
       } catch (e) {
@@ -646,11 +646,11 @@
         return [];
       }
 
-      return auth.usuario.telas.map((tela) => ({
+      return auth.usuario.telas.map(tela => ({
         modulo: tela.modulo,
         codigoTela: tela.codigo,
         rota: tela.rota,
-        podeVer: tela.podeVer !== false,
+        podeVer: tela.podeVer !== false
       }));
     }
 
@@ -660,14 +660,14 @@
       permissoes.push({
         modulo: "INICIO",
         codigoTela: "INICIO_HOME",
-        podeVer: true,
+        podeVer: true
       });
 
       const permitido = new Set(
         permissoes
-          .filter((p) => p.podeVer)
+          .filter(p => p.podeVer)
           .map(
-            (p) =>
+            p =>
               `${(p.modulo || "").toUpperCase()}|${(
                 p.codigoTela || ""
               ).toUpperCase()}`
@@ -676,7 +676,7 @@
 
       document
         .querySelectorAll(".sidebar-nav a[data-modulo][data-codigo]")
-        .forEach((a) => {
+        .forEach(a => {
           const modulo = (a.dataset.modulo || "").toUpperCase();
           const codigo = (a.dataset.codigo || "").toUpperCase();
           const key = `${modulo}|${codigo}`;
@@ -698,13 +698,13 @@
 
       document
         .querySelectorAll(".nav-item.dropdown-container")
-        .forEach((container) => {
+        .forEach(container => {
           const submenu = container.querySelector(".dropdown-menu");
           if (!submenu) return;
 
           const hasVisibleItem = Array.from(
             submenu.querySelectorAll("li.nav-item")
-          ).some((li) => li.style.display !== "none");
+          ).some(li => li.style.display !== "none");
 
           if (!hasVisibleItem) {
             container.style.display = "none";
