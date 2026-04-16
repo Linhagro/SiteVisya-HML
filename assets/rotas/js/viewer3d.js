@@ -134,7 +134,9 @@ function criarBau(caminhao) {
     opacity: 0.18
   });
   const bau = new THREE.Mesh(bauGeom, bauMat);
-  bau.position.set(0, altura / 2, 0);
+
+  // baú: x:0..comprimento, y:0..altura, z:0..largura
+  bau.position.set(comprimento / 2, altura / 2, largura / 2);
   scene.add(bau);
 
   const edges = new THREE.EdgesGeometry(bauGeom);
@@ -171,6 +173,8 @@ function criarVolumes(volumes) {
       roughness: 0.6
     });
     const mesh = new THREE.Mesh(geom, mat);
+
+    // v.x, v.y, v.z no sistema 0..comprimento / 0..largura / 0..altura
     mesh.position.set(v.x || 0, v.y || altura / 2, v.z || 0);
 
     mesh.userData.volumeData = v;
@@ -236,7 +240,8 @@ function renderListaVolumes(volumes) {
 
     const title = document.createElement('div');
     title.className = 'v3d-volume-title';
-    title.textContent = `Ped ${v.pedido} • ${v.codprod}`;
+    const cod = v.codprod || v.descrprod || 'Volume agregado';
+    title.textContent = `Ped ${v.pedido} • ${cod}`;
 
     const chip = document.createElement('div');
     chip.className = 'v3d-volume-chip';
@@ -247,7 +252,7 @@ function renderListaVolumes(volumes) {
 
     const sub1 = document.createElement('div');
     sub1.className = 'v3d-volume-sub';
-    sub1.textContent = v.descrprod || '';
+    sub1.textContent = v.descrprod || (v.codprod ? `Produto ${v.codprod}` : 'Volume agregado');
 
     const sub2 = document.createElement('div');
     sub2.className = 'v3d-volume-sub';
@@ -360,7 +365,7 @@ function imprimirLayout() {
     .map(
       (v) => `<tr>
             <td>${v.pedido}</td>
-            <td>${v.codprod}</td>
+            <td>${v.codprod || v.descrprod || 'Volume agregado'}</td>
             <td>${(v.pesoKg || 0).toFixed(1)}</td>
             <td>${(v.volumeM3 || 0).toFixed(3)}</td>
             <td>${(v.profundidadeM || 0).toFixed(2)} x ${(v.larguraM || 0).toFixed(

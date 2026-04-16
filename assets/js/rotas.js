@@ -1730,6 +1730,7 @@ async function sugerirCaminhaoParaCarga(pesoTotalKg) {
   }
 }
 
+
 function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
   if (!caminhaoSelecionado || !pedidosSelecionados || !pedidosSelecionados.length) {
     return null;
@@ -1743,12 +1744,24 @@ function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
   const cores = [0x22c55e, 0x3b82f6, 0xf97316, 0xa855f7, 0x14b8a6];
   let corIdxPorPedido = new Map();
 
-  let posX = 0.5;
-  let posZ = 0.5;
-  let camadas = [{ yBase: 0, alturaUsada: 0 }]; // simples: uma camada por enquanto
+  // margens internas para evitar encostar na parede
+  const margemX = comprimentoM * 0.02;
+  const margemZ = larguraM * 0.02;
+  const margemY = alturaM * 0.02;
+
+  const minX = margemX;
+  const maxX = comprimentoM - margemX;
+  const minZ = margemZ;
+  const maxZ = larguraM - margemZ;
+  const minY = margemY;
+  const maxY = alturaM - margemY;
+
+  let posX = minX;
+  let posZ = minZ;
+  let camadas = [{ yBase: minY, alturaUsada: 0 }];
   let camadaAtual = 0;
 
-  pedidosSelecionados.forEach((pedido, idxPedido) => {
+  pedidosSelecionados.forEach((pedido) => {
     const nunota = pedido.nunota;
     const chave = String(nunota);
     const agreg = cachePedidosItens.get(chave);
@@ -1759,14 +1772,13 @@ function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
     }
     const corBase = corIdxPorPedido.get(chave);
 
-    agreg.itens.forEach((it, idxItem) => {
+    agreg.itens.forEach((it) => {
       const qtd = Number(it.qtdneg) || 1;
+
       for (let q = 0; q < qtd; q++) {
-        // dimensões por unidade
         let larguraItem = Number(it.largura) || 0;
         let alturaItem = Number(it.altura) || 0;
         let profItem = Number(it.espessura) || 0;
-
         let volumeM3 = it.volumeUnitM3 || 0;
 
         if (!larguraItem || !alturaItem || !profItem) {
@@ -1782,52 +1794,120 @@ function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
           }
         }
 
-        // se não couber em X, quebra linha em Z
-        if (posX + profItem > comprimentoM) {
-          posX = 0.5;
-          posZ += 1.2; // espaçamento entre "linhas"
-          // se passar da largura, poderíamos subir camada (Y)
-          if (posZ + larguraItem > larguraM) {
-            posZ = 0.5;
-            camadaAtual++;
-            camadas[camadaAtual] = {
-              yBase: camadas[camadaAtual - 1].yBase + camadas[camadaAtual - 1].alturaUsada + 0.1,
-              alturaUsada: 0
-            };
+        // se as dimensões do item forem maiores que o baú útil, ignora o item
+        if (
+          profItem > (maxX - minX) ||
+          larguraItem > (maxZ - minZ) ||
+          alturaItem > (maxY - minY)
+        ) {
+          continue;
+        }
+
+        // garante que estamos em uma camada válida
+        if (!camadas[camadaAtual]) {
+          camadas[camadaAtual] = {
+            yBase:
+              camadas[camadaAtual - 1].yBase +
+              camadas[camadaAtual - 1].alturaUsada +
+              margemY,
+            alturaUsada: 0
+          };
+        }
+
+        let colocado = false;
+
+        // tenta posicionar o item; se não couber na linha, quebra,
+        // se não couber na "fileira", começa nova camada
+        for (let tentativa = 0; tentativa < 3 && !colocado; tentativa++) {
+          const camada = camadas[camadaAtual];
+          const yBase = camada.yBase;
+
+          // se passar da altura útil do baú, não cabe mais nada
+          if (yBase + alturaItem > maxY) {
+            colocado = false;
+            break;
           }
+
+          // quebra de linha em X
+          if (posX + profItem > maxX) {
+            posX = minX;
+            posZ += larguraItem + margemZ;
+          }
+
+          // nova camada em Y se estourar Z
+          if (posZ + larguraItem > maxZ) {
+            posX = minX;
+            posZ = minZ;
+            camadaAtual++;
+            if (!camadas[camadaAtual]) {
+              camadas[camadaAtual] = {
+                yBase:
+                  camada.yBase + camada.alturaUsada + margemY,
+                alturaUsada: 0
+              };
+            }
+            continue;
+          }
+
+          const xCentro = posX + profItem / 2;
+          const zCentro = posZ + larguraItem / 2;
+          const yCentro = yBase + alturaItem / 2;
+
+          const halfX = profItem / 2;
+          const halfZ = larguraItem / 2;
+          const halfY = alturaItem / 2;
+
+          // limites do baú em 0..comprimento, 0..largura, 0..altura
+          if (
+            xCentro - halfX < minX ||
+            xCentro + halfX > maxX ||
+            zCentro - halfZ < minZ ||
+            zCentro + halfZ > maxZ ||
+            yCentro - halfY < minY ||
+            yCentro + halfY > maxY
+          ) {
+            // não cabe nessa posição, tenta outra linha/camada na próxima iteração
+            posX = minX;
+            posZ += larguraItem + margemZ;
+            if (posZ + larguraItem > maxZ) {
+              posZ = minZ;
+              camadaAtual++;
+            }
+            continue;
+          }
+
+          const alturaTopo = yBase + alturaItem;
+          if (alturaTopo > camada.yBase + camada.alturaUsada) {
+            camada.alturaUsada = alturaTopo - camada.yBase;
+          }
+
+          const pesoUnitKg = Number(it.pesoUnitKg) || 0;
+
+          volumes.push({
+            id: `${nunota}-${it.sequencia}-${q + 1}`,
+            pedido: nunota,
+            nunota: nunota,
+            codprod: it.codprod,
+            descrprod: it.descrprod,
+            larguraM: larguraItem,
+            alturaM: alturaItem,
+            profundidadeM: profItem,
+            x: xCentro,
+            y: yCentro,
+            z: zCentro,
+            cor: corBase,
+            pesoKg: pesoUnitKg,
+            volumeM3: volumeM3 || larguraItem * alturaItem * profItem
+          });
+
+          posX = xCentro + halfX + margemX;
+          colocado = true;
         }
 
-        const camada = camadas[camadaAtual];
-        const yBase = camada.yBase;
-        const alturaTopo = yBase + alturaItem;
-        if (alturaTopo > camadas[camadaAtual].alturaUsada) {
-          camadas[camadaAtual].alturaUsada = alturaTopo - camadas[camadaAtual].yBase;
+        // se não conseguiu posicionar nenhuma vez, ignora o item (não desenha fora do baú)
+        if (!colocado) {
+          continue;
         }
-
-        const xCentro = posX + profItem / 2;
-        const zCentro = posZ + larguraItem / 2;
-        const yCentro = yBase + alturaItem / 2;
-
-        const pesoUnitKg = Number(it.pesoUnitKg) || 0;
-
-        volumes.push({
-          id: `${nunota}-${it.sequencia}-${q + 1}`,
-          pedido: nunota,
-          nunota: nunota,
-          codprod: it.codprod,
-          descrprod: it.descrprod,
-          larguraM: larguraItem,
-          alturaM: alturaItem,
-          profundidadeM: profItem,
-          x: xCentro,
-          y: yCentro,
-          z: zCentro,
-          cor: corBase,
-          pesoKg: pesoUnitKg,
-          volumeM3: volumeM3 || (larguraItem * alturaItem * profItem)
-        });
-
-        posX += profItem + 0.1;
       }
     });
   });
@@ -1835,7 +1915,10 @@ function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
   return {
     caminhao: {
       id: caminhaoSelecionado.idCaminhao || caminhaoSelecionado.id,
-      descricao: caminhaoSelecionado.descricao || caminhaoSelecionado.placa || "Caminhão",
+      descricao:
+        caminhaoSelecionado.descricao ||
+        caminhaoSelecionado.placa ||
+        "Caminhão",
       comprimentoM,
       larguraM,
       alturaM
@@ -1843,7 +1926,6 @@ function montarCarga3DManualPorItens(caminhaoSelecionado, pedidosSelecionados) {
     volumes
   };
 }
-
 // EVENTOS INICIAIS
 function initEventos() {
   tipoOrigemSelect.addEventListener("change", () => {
